@@ -1207,10 +1207,18 @@ export default function App() {
     if (!el) return;
     // Small delay to ensure React has finished rendering the winners
     await new Promise(resolve => setTimeout(resolve, 100));
+    
+    const rect = el.getBoundingClientRect();
+    const pad = 40; // Expand capture area by 40px to prevent flag cropping
+
     html2canvas(el, {
       backgroundColor: null,
       useCORS: true,
-      scale: 2
+      scale: 2,
+      x: rect.left - pad + window.scrollX,
+      y: rect.top - pad + window.scrollY,
+      width: rect.width + pad * 2,
+      height: rect.height + pad * 2
     }).then(canvas => {
       const link = document.createElement('a');
       link.download = `${TITLE.toLowerCase().replace(/\s+/g, '-')}-bracket.png`;
