@@ -29,6 +29,8 @@ import html2canvas from 'html2canvas';
 import { DEFAULT_TEAMS } from './teamsData';
 import { fetchKnockoutMatches } from './api/footballData';
 import { mapMatchesToWinners } from './utils/matchMapper';
+import { useWorldCupData } from './hooks/useWorldCupData';
+import { MatchSchedule } from './components/MatchSchedule/MatchSchedule';
 
 // Geometry constants
 const S = [32, 32, 16, 8, 4, 2];
@@ -297,14 +299,14 @@ const FlagImage = React.memo(({ team, className }) => {
 });
 
 // Interactive flag with tooltip
-function InteractiveFlag({ team, side, inactive = false, beatBy }) {
+function InteractiveFlag({ team, side, inactive = false, beatBy, isPredicted = false }) {
   const flagRef = useRef(null);
   const [isFocused, setIsFocused] = useState(false);
   const [visible, setVisible] = useState(false);
   const [coords, setCoords] = useState({});
   const { active, onMouseEnter, onMouseLeave, showImmediately, hideImmediately } = me({ showDelay: 0, hideDelay: 80 });
 
-  const tooltipText = beatBy ? `${team.name} — lost to ${beatBy.name}` : team.name;
+  const tooltipText = (beatBy ? `${team.name} — lost to ${beatBy.name}` : team.name) + (isPredicted ? ' (Predicted)' : '');
   const isShown = active || isFocused;
 
   const updatePosition = useCallback(() => {
@@ -373,7 +375,7 @@ function InteractiveFlag({ team, side, inactive = false, beatBy }) {
         onMouseLeave={onMouseLeave}
       >
         <span className={`circle-points__flag-stack${inactive ? ' circle-points__flag-stack--inactive' : ''}`}>
-          <FlagImage team={team} className="circle-points__flag circle-points__flag--active" />
+          <FlagImage team={team} className={`circle-points__flag circle-points__flag--active ${isPredicted ? 'circle-points__flag--predicted' : ''}`} />
           <FlagImage team={team} className="circle-points__flag circle-points__flag--inactive" />
         </span>
       </span>
@@ -464,7 +466,7 @@ function TravelingFlag({ sourceSlotKey, pathD, startPosition, onComplete, team, 
 }
 
 // Circular bracket UI component
-const BracketCircle = React.forwardRef(({ positions, pairWinners, onPairWinnersChange, activeTheme }, ref) => {
+const BracketCircle = React.forwardRef(({ positions, pairWinners, officialWinners = {}, onPairWinnersChange, activeTheme }, ref) => {
   const [radialOffset, setRadialOffset] = useState(0);
   const [animations, setAnimations] = useState([]);
 
@@ -568,8 +570,15 @@ const BracketCircle = React.forwardRef(({ positions, pairWinners, onPairWinnersC
 
   const handleTeamClick = useCallback((ringIdx, slotIdx) => {
     const pairIdx = re(slotIdx);
+    const pairKey = te(ringIdx, pairIdx);
+    const pMatchOutcome = ue(ringIdx, slotIdx, evaluatedSlots, pairWinners);
+    if (pMatchOutcome === 'eliminated') return;
+
     const team = evaluatedSlots[ee(ringIdx, slotIdx)];
     if (!team) return;
+
+    // Prevent changing official winners
+    if (officialWinners[pairKey]) return;
 
     const otherSlotIdx = slotIdx % 2 === 0 ? slotIdx + 1 : slotIdx - 1;
     const hasOpponent = !!evaluatedSlots[ee(ringIdx, otherSlotIdx)];
@@ -678,7 +687,7 @@ const BracketCircle = React.forwardRef(({ positions, pairWinners, onPairWinnersC
       ...prev.filter(a => a.targetSlotKey !== targetKey),
       { id: `${targetKey}-${team.isoCode}-${Date.now()}`, team, pathD, startPosition: startPos, sourceSlotKey: sourceKey, targetSlotKey: targetKey, reversed: false, chainAnimation: null }
     ]);
-  }, [evaluatedSlots, pairWinners, positions, allAnimatedKeys, onPairWinnersChange, ringPoints, getRingRadius, getPairArcMidpoint]);
+  }, [evaluatedSlots, pairWinners, positions, allAnimatedKeys, onPairWinnersChange, ringPoints, getRingRadius, getPairArcMidpoint, officialWinners]);
 
   const renderSlot = useCallback((ringIdx, pt, slotIdx) => {
     const isFirstRing = ringIdx === 0;
@@ -727,7 +736,17 @@ const BracketCircle = React.forwardRef(({ positions, pairWinners, onPairWinnersC
     const style = { left: `${pt.x}%`, top: `${pt.y}%` };
 
     const defeatedBy = matchOutcome === 'eliminated' ? D(ringIdx, pairIdx, pairWinners) : null;
-    const flagEl = showFlag ? <InteractiveFlag team={team} side={side} inactive={matchOutcome === 'eliminated'} beatBy={defeatedBy} /> : null;
+    let isPredicted = false;
+    if (!isFirstRing && team) {
+      const prevRing = wReverse[ringIdx];
+      const prevPair = re(slotIdx); // pair index in the previous round
+      const prevPairKey = te(prevRing, prevPair);
+      if (officialWinners[prevPairKey]?.isoCode !== team.isoCode) {
+        isPredicted = true;
+      }
+    }
+
+    const flagEl = showFlag ? <InteractiveFlag team={team} side={side} inactive={matchOutcome === 'eliminated'} beatBy={defeatedBy} isPredicted={isPredicted} /> : null;
     const btnLabel = `Select ${team?.name ?? team?.isoCode}`;
     const clickHandler = () => handleTeamClick(ringIdx, slotIdx);
 
@@ -769,7 +788,7 @@ const BracketCircle = React.forwardRef(({ positions, pairWinners, onPairWinnersC
     }
 
     return <span key={pt.id} className={classes} style={style}></span>;
-  }, [evaluatedSlots, pairWinners, animatedTargets, animatedSources, allAnimatedKeys, passedPairs, advancingPairs, handleTeamClick]);
+  }, [evaluatedSlots, pairWinners, animatedTargets, animatedSources, allAnimatedKeys, passedPairs, advancingPairs, handleTeamClick, officialWinners]);
 
   return (
     <div className="circle-points" ref={ref}>
@@ -1017,11 +1036,44 @@ export default function App() {
     });
   }, []);
 
-  const [pairWinners, setPairWinners] = useState(() => {
+  const [userPredictions, setUserPredictions] = useState(() => {
     if (shareId) return {};
     // Always use presets as default, ignore localStorage for now
     return Ms(positions);
   });
+  
+  const { matches, groupedMatches, officialWinners, loading: apiLoading, error: apiError } = useWorldCupData();
+
+  const mergedWinners = useMemo(() => {
+    return { ...userPredictions, ...officialWinners };
+  }, [userPredictions, officialWinners]);
+
+  const handlePredictionChange = useCallback((newWinners) => {
+    const newPredictions = {};
+    for (const [key, team] of Object.entries(newWinners)) {
+      if (!officialWinners[key] || officialWinners[key].isoCode !== team.isoCode) {
+        newPredictions[key] = team;
+      }
+    }
+    setUserPredictions(newPredictions);
+  }, [officialWinners]);
+
+  // Purge colliding predictions when official results arrive
+  useEffect(() => {
+    setUserPredictions((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const key of Object.keys(next)) {
+        // If the API officially finished this match, wipe any manual prediction for it
+        if (officialWinners[key]) {
+           delete next[key];
+           changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [officialWinners]);
+
   // Live data states
   const [liveError, setLiveError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
@@ -1048,38 +1100,6 @@ export default function App() {
       document.documentElement.classList.add(`theme-${resolved}`);
     }, [theme]);
 
-    // Fetch live match data on mount and every 5 minutes (disabled to ensure presets show)
-    // useEffect(() => {
-    //   let intervalId;
-    //   const loadLive = async () => {
-    //     try {
-    //       const matches = await fetchKnockoutMatches();
-    //       const liveWinners = mapMatchesToWinners(matches, DEFAULT_TEAMS);
-    //       // Only update if live data exists, otherwise keep presets
-    //       if (Object.keys(liveWinners).length > 0) {
-    //         setPairWinners(prev => ({ ...prev, ...liveWinners }));
-    //       }
-    //       setLiveError(null);
-    //       setLastRefresh(new Date());
-    //     } catch (err) {
-    //       console.error('Live match fetch error:', err);
-    //       setLiveError(err.message);
-    //     }
-    //   };
-    //   loadLive();
-    //   intervalId = setInterval(loadLive, 5 * 60 * 1000);
-    //   return () => clearInterval(intervalId);
-    // }, []);
-
-  // Save winners to localStorage (disabled for now to ensure presets show)
-  // useEffect(() => {
-  //   const winnersCodes = {};
-  //   for (let [k, v] of Object.entries(pairWinners)) {
-  //     winnersCodes[k] = v.isoCode;
-  //   }
-  //   localStorage.setItem('bracket_winners_state', JSON.stringify(winnersCodes));
-  // }, [pairWinners]);
-
   // Load shared draw
   useEffect(() => {
     if (!shareId) return;
@@ -1093,7 +1113,7 @@ export default function App() {
           setSharedError(res.error);
           return;
         }
-        setPairWinners(res.pairWinners);
+        setUserPredictions(res.pairWinners);
         setTriggerKey(prev => prev + 1);
       } catch (err) {
         if (!cancelled) {
@@ -1135,7 +1155,7 @@ export default function App() {
   }, []);
 
   const handleCopyCurrent = useCallback(async () => {
-    const dataStr = Pe(pairWinners);
+    const dataStr = Pe(userPredictions);
     setDebugValue(dataStr);
     setDebugMsg(null);
     try {
@@ -1144,7 +1164,7 @@ export default function App() {
     } catch {
       setDebugMsg('State updated in textarea (clipboard unavailable).');
     }
-  }, [pairWinners]);
+  }, [userPredictions]);
 
   const handleLoadState = useCallback(() => {
     const res = Fe(debugValue, positions);
@@ -1152,13 +1172,13 @@ export default function App() {
       setDebugMsg(res.error);
       return;
     }
-    setPairWinners(res.pairWinners);
+    setUserPredictions(res.pairWinners);
     setTriggerKey(prev => prev + 1);
     setDebugMsg('State loaded.');
   }, [debugValue, positions]);
 
   const handleResetState = useCallback(() => {
-    setPairWinners({});
+    setUserPredictions({});
     setTriggerKey(prev => prev + 1);
     setDebugValue('');
     setDebugMsg('Draw reset.');
@@ -1171,7 +1191,7 @@ export default function App() {
     setCopiedLink(false);
     setIsUploading(true);
     try {
-      const payload = Pe(pairWinners);
+      const payload = Pe(userPredictions);
       const b64 = btoa(payload);
       const url = new URL(window.location.href);
       url.search = '';
@@ -1182,7 +1202,7 @@ export default function App() {
     } finally {
       setIsUploading(false);
     }
-  }, [pairWinners]);
+  }, [userPredictions]);
 
   const handleCloseShare = useCallback(() => {
     setShowShareModal(false);
@@ -1234,7 +1254,7 @@ export default function App() {
   };
 
 
-  const hasWinners = Object.keys(pairWinners).length > 0;
+  const hasWinners = Object.keys(userPredictions).length > 0;
 
   // Bracket draw page
   return (
@@ -1317,12 +1337,17 @@ export default function App() {
           <BracketCircle
             ref={bracketRef}
             positions={positions}
-            pairWinners={pairWinners}
-            onPairWinnersChange={setPairWinners}
+            pairWinners={mergedWinners}
+              officialWinners={officialWinners}
+            onPairWinnersChange={handlePredictionChange}
             key={triggerKey}
             activeTheme={activeResolvedTheme}
           />
         )}
+      </div>
+
+      <div className="app-schedule-panel">
+        <MatchSchedule groupedMatches={groupedMatches} loading={apiLoading} error={apiError} />
       </div>
 
       {showShareModal && (

@@ -1308,3 +1308,10 @@ button.circle-points__point {
     min-width: 60px;
   }
 }
+
+.circle-points__flag-stack { position: relative; }
+.circle-points__flag--predicted { opacity: 0.85; filter: drop-shadow(0 0 2px var(--error)); }
+.circle-points__flag--predicted::after { content: '?'; position: absolute; bottom: -4px; right: -4px; background: var(--error); color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 10px; display: flex; align-items: center; justify-content: center; font-weight: bold; z-index: 10; }
+
+.app-schedule-panel { width: 320px; flex-shrink: 0; background: var(--bg); height: 100vh; overflow: hidden; }
+@media (max-width: 1024px) { .app-schedule-panel { width: 100%; height: auto; min-height: 50vh; border-top: 1px solid var(--border); border-left: none; } }

@@ -7,7 +7,6 @@ export async function fetchKnockoutMatches() {
     throw new Error('Missing VITE_FOOTBALL_DATA_API_KEY environment variable');
   }
 
-  // Competition code for FIFA World Cup (WC). The 2026 edition is identified by the year; the API uses the same code.
   const endpoint = 'https://api.football-data.org/v4/competitions/WC/matches?stage=knockout';
   const response = await fetch(endpoint, {
     headers: {
@@ -21,22 +20,47 @@ export async function fetchKnockoutMatches() {
   }
 
   const data = await response.json();
-  // Expected shape: { matches: [ { id, stage, homeTeam: { id, name, shortName, tla }, awayTeam: {...}, score: { fullTime: { home, away } } } ] }
-  // Normalize to a simple array of objects we can map later.
-  const matches = (data.matches || []).map((m) => ({
-    matchId: m.id,
-    stage: m.stage, // e.g., "LAST_16", "QUARTER_FINALS", "SEMI_FINALS", "FINAL"
-    homeCode: m.homeTeam.tla || m.homeTeam.name,
-    awayCode: m.awayTeam.tla || m.awayTeam.name,
-    homeScore: m.score.fullTime.home,
-    awayScore: m.score.fullTime.away,
-    winnerCode:
-      m.score.fullTime.home > m.score.fullTime.away
-        ? m.homeTeam.tla || m.homeTeam.name
-        : m.score.fullTime.away > m.score.fullTime.home
-        ? m.awayTeam.tla || m.awayTeam.name
-        : null,
-  }));
+  
+  const matches = (data.matches || []).map((m) => {
+    const homeTeam = m.homeTeam || {};
+    const awayTeam = m.awayTeam || {};
+    const score = m.score || { fullTime: { home: null, away: null }, halfTime: { home: null, away: null }, extraTime: { home: null, away: null }, penalties: { home: null, away: null } };
+    
+    let winnerCode = null;
+    if (m.status === 'FINISHED') {
+      if (score.winner === 'HOME_TEAM') winnerCode = homeTeam.tla || homeTeam.name;
+      else if (score.winner === 'AWAY_TEAM') winnerCode = awayTeam.tla || awayTeam.name;
+      else if (score.fullTime && score.fullTime.home > score.fullTime.away) winnerCode = homeTeam.tla || homeTeam.name;
+      else if (score.fullTime && score.fullTime.away > score.fullTime.home) winnerCode = awayTeam.tla || awayTeam.name;
+      else if (score.penalties && score.penalties.home > score.penalties.away) winnerCode = homeTeam.tla || homeTeam.name;
+      else if (score.penalties && score.penalties.away > score.penalties.home) winnerCode = awayTeam.tla || awayTeam.name;
+    }
+
+    return {
+      matchId: m.id,
+      stage: m.stage,
+      status: m.status,
+      utcDate: m.utcDate,
+      venue: m.venue || null,
+      minute: m.minute || null,
+      homeTeam: {
+        id: homeTeam.id,
+        name: homeTeam.name,
+        shortName: homeTeam.shortName,
+        tla: homeTeam.tla,
+        crest: homeTeam.crest
+      },
+      awayTeam: {
+        id: awayTeam.id,
+        name: awayTeam.name,
+        shortName: awayTeam.shortName,
+        tla: awayTeam.tla,
+        crest: awayTeam.crest
+      },
+      score: score,
+      winnerCode: winnerCode
+    };
+  });
 
   return matches;
 }
