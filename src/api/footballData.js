@@ -2,17 +2,8 @@
 // Fetch knockout stage matches for FIFA World Cup 2026 using football-data.org free tier API
 
 export async function fetchKnockoutMatches() {
-  const apiKey = import.meta.env.VITE_FOOTBALL_DATA_API_KEY;
-  if (!apiKey) {
-    throw new Error('Missing VITE_FOOTBALL_DATA_API_KEY environment variable');
-  }
-
   const endpoint = '/api/fifa';
-  const response = await fetch(endpoint, {
-    headers: {
-      'X-Auth-Token': apiKey,
-    },
-  });
+  const response = await fetch(endpoint);
 
   if (!response.ok) {
     const txt = await response.text();
