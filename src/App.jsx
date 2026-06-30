@@ -1038,6 +1038,7 @@ export default function App() {
   const [sharedError, setSharedError] = useState(null);
 
   const bracketRef = useRef(null);
+  const exportRef = useRef(null);
 
   // Apply theme class directly to <html> element so it covers the whole page
   useEffect(() => {
@@ -1203,22 +1204,15 @@ export default function App() {
   }, [shareLink]);
 
   const handleExportPNG = async () => {
-    const el = bracketRef.current;
+    const el = exportRef.current;
     if (!el) return;
     // Small delay to ensure React has finished rendering the winners
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    const rect = el.getBoundingClientRect();
-    const pad = 40; // Expand capture area by 40px to prevent flag cropping
-
     html2canvas(el, {
       backgroundColor: null,
       useCORS: true,
-      scale: 2,
-      x: rect.left - pad + window.scrollX,
-      y: rect.top - pad + window.scrollY,
-      width: rect.width + pad * 2,
-      height: rect.height + pad * 2
+      scale: 2
     }).then(canvas => {
       const link = document.createElement('a');
       link.download = `${TITLE.toLowerCase().replace(/\s+/g, '-')}-bracket.png`;
@@ -1310,14 +1304,16 @@ export default function App() {
         ) : sharedError ? (
           <p className="app-main__loading" style={{ color: 'var(--error)' }} role="alert">{sharedError}</p>
         ) : (
-          <BracketCircle
-            ref={bracketRef}
-            positions={positions}
-            pairWinners={pairWinners}
-            onPairWinnersChange={setPairWinners}
-            key={triggerKey}
-            activeTheme={activeResolvedTheme}
-          />
+          <div ref={exportRef} style={{ padding: '40px' }}>
+            <BracketCircle
+              ref={bracketRef}
+              positions={positions}
+              pairWinners={pairWinners}
+              onPairWinnersChange={setPairWinners}
+              key={triggerKey}
+              activeTheme={activeResolvedTheme}
+            />
+          </div>
         )}
       </div>
 
