@@ -1038,7 +1038,6 @@ export default function App() {
   const [sharedError, setSharedError] = useState(null);
 
   const bracketRef = useRef(null);
-  const exportRef = useRef(null);
 
   // Apply theme class directly to <html> element so it covers the whole page
   useEffect(() => {
@@ -1204,23 +1203,34 @@ export default function App() {
   }, [shareLink]);
 
   const handleExportPNG = async () => {
-    const el = exportRef.current;
+    const el = bracketRef.current;
     if (!el) return;
+    
+    const originalBorder = el.style.border;
+    const originalBoxSizing = el.style.boxSizing;
+    
+    el.style.border = '40px solid transparent';
+    el.style.boxSizing = 'content-box';
+
     // Small delay to ensure React has finished rendering the winners
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    html2canvas(el, {
-      backgroundColor: null,
-      useCORS: true,
-      scale: 2
-    }).then(canvas => {
+    try {
+      const canvas = await html2canvas(el, {
+        backgroundColor: null,
+        useCORS: true,
+        scale: 2
+      });
       const link = document.createElement('a');
       link.download = `${TITLE.toLowerCase().replace(/\s+/g, '-')}-bracket.png`;
       link.href = canvas.toDataURL();
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    });
+    } finally {
+      el.style.border = originalBorder;
+      el.style.boxSizing = originalBoxSizing;
+    }
   };
 
 
@@ -1304,16 +1314,14 @@ export default function App() {
         ) : sharedError ? (
           <p className="app-main__loading" style={{ color: 'var(--error)' }} role="alert">{sharedError}</p>
         ) : (
-          <div ref={exportRef} style={{ padding: '40px' }}>
-            <BracketCircle
-              ref={bracketRef}
-              positions={positions}
-              pairWinners={pairWinners}
-              onPairWinnersChange={setPairWinners}
-              key={triggerKey}
-              activeTheme={activeResolvedTheme}
-            />
-          </div>
+          <BracketCircle
+            ref={bracketRef}
+            positions={positions}
+            pairWinners={pairWinners}
+            onPairWinnersChange={setPairWinners}
+            key={triggerKey}
+            activeTheme={activeResolvedTheme}
+          />
         )}
       </div>
 
