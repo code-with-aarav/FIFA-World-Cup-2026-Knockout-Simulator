@@ -947,36 +947,17 @@ function Ns() {
 }
 
 function Ds() {
-  let e = new URLSearchParams(window.location.search).get('share');
-  return e && /^[A-Za-z0-9_-]{10}$/.test(e) ? e : null;
+  let e = new URLSearchParams(window.location.search).get('state');
+  return e ? e : null;
 }
 
-async function ks(id) {
-  const response = await fetch(`/api/share/${id}`);
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to load shared draw');
+async function ks(stateStr) {
+  try {
+    return atob(stateStr);
+  } catch (err) {
+    throw new Error('Failed to load shared draw: Invalid data format.');
   }
-  const data = await response.json();
-  return data.payload;
 }
-
-async function Os(payload) {
-  const response = await fetch('/api/share', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ payload }),
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to save shared draw');
-  }
-  const data = await response.json();
-  return data.id;
-}
-
 function Ne(teams, code) {
   let n = teams.find(e => e.isoCode === code);
   return n ? { isoCode: n.isoCode, name: n.name ?? n.isoCode } : null;
@@ -1191,10 +1172,10 @@ export default function App() {
     setIsUploading(true);
     try {
       const payload = Pe(pairWinners);
-      const id = await Os(payload);
+      const b64 = btoa(payload);
       const url = new URL(window.location.href);
       url.search = '';
-      url.searchParams.set('share', id);
+      url.searchParams.set('state', b64);
       setShareLink(url.toString());
     } catch (err) {
       setShareError(err instanceof Error ? err.message : 'Failed to share draw.');
