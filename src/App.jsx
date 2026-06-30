@@ -952,7 +952,7 @@ function Ds() {
 }
 
 async function ks(id) {
-  const response = await fetch(`http://localhost:3001/api/share/${id}`);
+  const response = await fetch(`/api/share/${id}`);
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || 'Failed to load shared draw');
@@ -962,7 +962,7 @@ async function ks(id) {
 }
 
 async function Os(payload) {
-  const response = await fetch('http://localhost:3001/api/share', {
+  const response = await fetch('/api/share', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1318,6 +1318,8 @@ export default function App() {
       <div className="app-main">
         {isLoadingShared ? (
           <p className="app-main__loading" role="status">Loading shared draw</p>
+        ) : sharedError ? (
+          <p className="app-main__loading" style={{ color: 'var(--error)' }} role="alert">{sharedError}</p>
         ) : (
           <BracketCircle
             ref={bracketRef}
