@@ -7,7 +7,7 @@ export async function fetchKnockoutMatches() {
     throw new Error('Missing VITE_FOOTBALL_DATA_API_KEY environment variable');
   }
 
-  const endpoint = 'https://api.football-data.org/v4/competitions/WC/matches?stage=knockout';
+  const endpoint = '/api/fifa';
   const response = await fetch(endpoint, {
     headers: {
       'X-Auth-Token': apiKey,

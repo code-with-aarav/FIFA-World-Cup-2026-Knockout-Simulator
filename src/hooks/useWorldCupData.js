@@ -35,7 +35,7 @@ export function useWorldCupData() {
       console.error('Failed to fetch tournament data:', err);
       const cached = localStorage.getItem(CACHE_KEY);
       if (!cached) {
-        setError('Unable to fetch live data.');
+        setError(`Unable to fetch live data: ${err.message}`);
       }
     } finally {
       if (isInitial) setLoading(false);
